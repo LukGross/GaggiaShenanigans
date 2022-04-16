@@ -1,22 +1,21 @@
-from machine import Pin
-from time import sleep, ticks_us
-from tsic import tsic306
-    
+from machine import Pin, PWM, ADC
+from time import sleep, ticks_us, ticks_ms
+from tsic import tsic
 
-temp = Pin(15, Pin.IN, Pin.PULL_UP)
-led = Pin(2, Pin.OUT)
 
-tsic = tsic306(temp)
-
-sleep(1)
+temp = Pin(33, Pin.IN, Pin.PULL_UP)
+#press = ADC(Pin(15), atten=ADC.ATTN_11DB)
+#pump = Pin(18, Pin.IN, Pin.PULL_DOWN)
+#steam = Pin(19, Pin.IN, Pin.PULL_DOWN)
+#relais = Pin(21, Pin.OUT)
+#led = Pin(5, Pin.OPEN_DRAIN)
+#led.value(0)
+ttemp = ticks_ms()
+sens = tsic(temp)
 while True:
-    t = tsic.ReadTemp_int()
-    print(t)
-    if t == None:
-        led.value(0)
-    else:
-        if t > 25:
-            led.value(1)
-        else:
-            led.value(0)
-    sleep(.1)
+    temperature = sens.ReadTemp_c()
+    #pressure = (round(20.6843*(press.read_uv() - 330000)/2600000,1))
+    #led.value(not steam.value())
+    #relais.value(pump.value())
+    print(temperature)
+    sleep(.5)
