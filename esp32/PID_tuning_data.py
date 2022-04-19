@@ -44,9 +44,9 @@ press_adc = ADC(press_pin, atten=ADC.ATTN_11DB)
 temp_sens = tsic(temp_pin)
 
 # actors #
-def valve_open():
+def valve_on():
     valve_pin(0)
-def valve_close():
+def valve_off():
     valve_pin(1)
 
 def pump_on():
@@ -67,7 +67,7 @@ def light_off():
 def all_off():
     pump_off()
     heater_off()
-    valve_close()
+    valve_off()
     light_off()
     
 # switches #
@@ -77,11 +77,50 @@ def is_steam():
 def is_brew():
     return brew_pin()
 
-while True:
-    print()
+
+# Program #
+pid = PID(1, 0.1, 30, setpoint=35, scale='s')
+pid.sample_time = 1
+pid.output_limits = (0, 50)
+pwm = PWM(heater_pin, freq=1, duty=0)
+intensity = 0
+file = open("test.csv", "w")
+cond = True
+t0 = time()
+t = t0
+t_last = t0
+sleep(1)
+pressure = 0
+while t-t0 < 200:
+    t = time()
+    if t > t_last:
+        temperature = temp_sens.ReadTemp_c()
+        intensity = pid(temperature)
+        pwm.duty(int(1023*intensity/50))
+        file.write(str(t) + "," + str(intensity) + ","
+                   + str(temperature) + "\n")
+        print("temp: ", temperature, "pid-out: ", intensity, "time: ", t-t0, "pressure: ", pressure, end = "           \r")
+    
     if is_brew():
         light_on()
-        pump_on()
-        valve_open()
+        valve_on()
+        p = 0
+        for j in range(100):
+            p += 20.6843*(press_adc.read_uv() - 330000)/2600000/100
+        pressure = p
+        if pressure < 9:
+            pump_on()
+        else:
+            pump_off()
+
     else:
-        all_off()
+        light_off()
+        pump_off()
+        valve_off()
+    
+    t_last = t
+
+#all_off()
+pwm.duty(0)    
+file.close()
+

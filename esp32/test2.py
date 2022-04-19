@@ -10,7 +10,7 @@ from hx711_gpio import HX711
 from machine import Pin
 from time import sleep, ticks_us, ticks_diff
 
-pin_OUT = Pin(21, Pin.IN, pull=Pin.PULL_DOWN)
+pin_OUT = Pin(19, Pin.IN, pull=Pin.PULL_DOWN)
 pin_SCK = Pin(18, Pin.OUT)
 
 left = HX711(pin_SCK, pin_OUT, gain = 128)
