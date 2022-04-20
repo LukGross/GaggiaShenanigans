@@ -1,37 +1,33 @@
-from time import ticks_cpu, ticks_diff, sleep
+from time import ticks_cpu, ticks_ms, ticks_diff, sleep
 from collections import deque
+from machine import Timer
 
 
 class tsic:
-    def __init__(self, pin, maxBitTime=100000, high=150, low=-50, prec=1, bits=11):
-        self.ZACwire = pin
+    def __init__(self, pin, maxBitTime=100000, high=150, low=-50, prec=1,
+                 bits=11):
+        self.data = pin
         self.maxBitTime = maxBitTime
         self.high = high
         self.low = low
         self.prec = prec
         self.bits = bits
-        self.q = deque((), 41)
+        self.q = deque((), 40)
         self.T = None
+        self.tau = 0
+        self.timer = Timer(0)
+        self.period = 77
 
-        self.startBuffer()
+        self.startReading(self.timer)
 
     def ReadBuffer(self):
-        if len(self.q) < 41:
-            # print("short")
-            return None
         t1 = self.q.popleft()
-        t2 = self.q.popleft()
-        t = ticks_diff(t2, t1)
-        if t < self.maxBitTime:
-            # print("shifted")
-            return None
-        t1 = t2
         t2 = self.q.popleft()
         t3 = self.q.popleft()
         strobe = ticks_diff(t2, t1)
         var = abs(1 - ticks_diff(t2, t1) / strobe)
         if var > 0.2:
-            # print("shifted")
+            #print("shifted")
             return None
         bitstr = 0
         parity = False
@@ -48,7 +44,7 @@ class tsic:
         t2 = self.q.popleft()
         t = ticks_diff(t2, t1)
         if not parity == (t < strobe):
-            # print("parity")
+            #print("parity")
             return None
         t1 = self.q.popleft()
         t2 = self.q.popleft()
@@ -67,38 +63,46 @@ class tsic:
         t2 = self.q.popleft()
         t = ticks_diff(t2, t1)
         if not parity == (t < strobe):
-            # print("parity")
+            #print("parity")
             return None
         return bitstr
 
     def ReadTemp_int(self):
-        temp = self.ReadBuffer()
-        if temp != None:
-            self.T = temp
         return self.T
 
     def ReadTemp_c(self):
+        return round(self.T / (2**self.bits - 1) * (self.high - self.low)
+                     + self.low, self.prec)
+        
+    def startReading(self, t):
+        t0 = ticks_ms()        
+        for i in range(20):
+            while self.data.value() == 1:
+                pass
+            self.q.append(ticks_cpu())
+            while self.data.value() == 0:
+                pass
+            self.q.append(ticks_cpu())
+        self.ReadTemp_int()
+        
         temp = self.ReadBuffer()
-        if temp != None:
+        if temp != None and (temp >= 0 and temp < 2**self.bits):
             self.T = temp
-        if self.T != None:
-            return round(
-                self.T / (2**self.bits - 1) * (self.high - self.low) + self.low,
-                self.prec,
-            )
-
-    def push(self, pin):
-        t = ticks_cpu()
-        self.q.append(t)
-
-    def startBuffer(self):
-        self.ZACwire.irq(trigger=3, handler=self.push)
-        sleep(0.2)
+        self.tau = ticks_diff(ticks_ms(), t0)
+        if self.tau < 4:
+            self.period = (self.period-1) % 120
+        elif self.tau > 5:
+            self.period = (self.period+1) % 120
+        t.init(mode=Timer.ONE_SHOT, period = self.period,
+               callback = self.startReading)
+        
+        
 
 
 class tsicActive(tsic):
     def __init__(
-        self, dataPin, powerPin, maxBitTime=40000, high=150, low=-50, prec=1, bits=11
+        self, dataPin, powerPin, maxBitTime=40000, high=150, low=-50,
+        prec=1, bits=11
     ):
         self.data = dataPin
         self.power = powerPin
@@ -108,13 +112,13 @@ class tsicActive(tsic):
         self.low = low
         self.prec = prec
         self.bits = bits
-        self.q = deque((), 41)
+        self.q = deque((), 40)
 
     def fillBuffer(self):
-        self.q = deque((), 41)
+        self.q = deque((), 40)
         self.power.value(1)
         self.q.append(ticks_cpu())
-        while len(self.q) < 41:
+        while len(self.q) < 40:
             while self.data.value() == 1:
                 pass
             self.q.append(ticks_cpu())

@@ -1,11 +1,13 @@
 from machine import Pin
-from time import sleep, ticks_ms, ticks_diff
+from time import sleep
 from tsic import tsicActive
+
 
 data = Pin(33, Pin.IN, Pin.PULL_UP)
 power = Pin(2, Pin.OUT)
-tsic = tsicActive(data, power)
-t0 = ticks_ms()
+sens = tsicActive(data, power)
+
 while True:
-    t = tsic.ReadTemp_c()
-    print(t, ticks_diff(ticks_ms(), t0))
+    temperature = sens.ReadTemp_c()
+    print("Temperature: " + str(temperature)+ "°")
+    sleep(1)

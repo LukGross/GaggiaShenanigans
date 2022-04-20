@@ -20,9 +20,9 @@
 # Imports #
 from machine import Pin, ADC, PWM
 from time import sleep, ticks_us, ticks_ms, ticks_diff, time
-from tsic import tsicActive
+from tsic import tsic
 from PID import PID
-from random import randint
+from pressure import pressure
 
 # Pin Declarations #
 # OUT
@@ -40,8 +40,16 @@ temp_pin = Pin(33, Pin.IN, Pin.PULL_UP)
 press_pin = Pin(32, Pin.IN)
 
 # initiate tsic, scale and pressure adc #
-press_adc = ADC(press_pin, atten=ADC.ATTN_11DB)
-temp_sens = tsicActive(temp_pin, Pin(2,Pin.OUT))
+press_adc = pressure(press_pin)
+temp_sens = tsic(temp_pin, Pin(2,Pin.OUT))
+
+# initiate heater PWM and PID-controller #
+brewtemp = 95
+steamtemp = 200
+heater = PWM(heater_pin, freq=1, duty=0)
+pid = PID(.7, 0.1, 30, setpoint=brewtemp, scale='s')
+pid.sample_time = 1
+pid.output_limits = (0, 50)
 
 # actors #
 def valve_on():
@@ -54,10 +62,10 @@ def pump_on():
 def pump_off():
     pump_pin(0)
     
-def heater_on():
-    heater_pin(1)
+def heater_on(duty = 1023):
+    heater.duty(duty)
 def heater_off():
-    heater_pin(0)
+    heater.duty(0)
 
 def light_on():
     light_pin(0)
@@ -79,47 +87,36 @@ def is_brew():
 
 
 # Program #
-pid = PID(1, 0.1, 30, setpoint=50, scale='s')
-pid.sample_time = 1
-pid.output_limits = (0, 50)
-pwm = PWM(heater_pin, freq=1, duty=0)
-intensity = 0
-file = open("test.csv", "w")
-cond = True
 t0 = ticks_ms()
 t = t0
 t_last = t0
-sleep(1)
-pressure = 0
-while t-t0 < 200000:
+while True:
     t = ticks_ms()
     if t > t_last+999:
         temperature = temp_sens.ReadTemp_c()
-        t_ = ticks_diff(ticks_ms(),t)
+        pressure = press_adc.read(100)
         intensity = pid(temperature)
-        pwm.duty(int(1023*intensity/50))
-        file.write(str(t) + "," + str(intensity) + ","
-                   + str(temperature) + "\n")
-        print("temp:", temperature, ", pid-out:", intensity, ", time:", ticks_diff(t,t0), ", pressure: ", pressure, t_, end = "           \r")
+        heater_on(int(1023*intensity/50))
+        print("temp:", temperature, ", pid-out:", intensity, ", time:",
+              round(ticks_diff(t,t0)/1000), ", pressure: ",
+              round(pressure,2), end = "           \r")
         t_last = t
-    if is_brew():
-        light_on()
+    if is_brew() and is_steam():
+        valve_off()
+        pump_on()
+        pid.setpoint = steamtemp
+    elif is_steam():
+        pump_off()
+        valve_off()
+        pid.setpoint = steamtemp
+    elif is_brew():
         valve_on()
-        p = 0
-        for j in range(100):
-            p += 20.6843*(press_adc.read_uv() - 330000)/2600000/100
-        pressure = p
-        if pressure < 9:
-            pump_on()
-        else:
-            pump_off()
-
+        pump_on()
+        pid.setpoint = brewtemp
     else:
-        light_off()
+        pid.setpoint = brewtemp
         pump_off()
         valve_off()
 
-#all_off()
-pwm.duty(0)    
-file.close()
+all_off()   
 
