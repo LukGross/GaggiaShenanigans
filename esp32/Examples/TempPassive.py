@@ -4,7 +4,7 @@ from tsic import tsic
 
 
 temp = Pin(33, Pin.IN, Pin.PULL_UP)
-#press = ADC(Pin(15), atten=ADC.ATTN_11DB)
+press = ADC(Pin(32), atten=ADC.ATTN_11DB)
 #pump = Pin(18, Pin.IN, Pin.PULL_DOWN)
 #steam = Pin(19, Pin.IN, Pin.PULL_DOWN)
 #relais = Pin(21, Pin.OUT)
@@ -14,8 +14,8 @@ ttemp = ticks_ms()
 sens = tsic(temp)
 while True:
     temperature = sens.ReadTemp_c()
-    #pressure = (round(20.6843*(press.read_uv() - 330000)/2600000,1))
+    pressure = (round(20.6843*(press.read_uv() - 330000)/2600000,1))
     #led.value(not steam.value())
     #relais.value(pump.value())
-    print(temperature)
+    print(temperature, pressure)
     sleep(.5)
