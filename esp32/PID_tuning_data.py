@@ -20,7 +20,7 @@
 # Imports #
 from machine import Pin, ADC, PWM
 from time import sleep, ticks_us, ticks_ms, ticks_diff, time
-from tsic import tsic
+from tsic import tsicActive
 from PID import PID
 from random import randint
 
@@ -41,7 +41,7 @@ press_pin = Pin(32, Pin.IN)
 
 # initiate tsic, scale and pressure adc #
 press_adc = ADC(press_pin, atten=ADC.ATTN_11DB)
-temp_sens = tsic(temp_pin)
+temp_sens = tsicActive(temp_pin, Pin(2,Pin.OUT))
 
 # actors #
 def valve_on():
@@ -79,28 +79,29 @@ def is_brew():
 
 
 # Program #
-pid = PID(1, 0.1, 30, setpoint=35, scale='s')
+pid = PID(1, 0.1, 30, setpoint=50, scale='s')
 pid.sample_time = 1
 pid.output_limits = (0, 50)
 pwm = PWM(heater_pin, freq=1, duty=0)
 intensity = 0
 file = open("test.csv", "w")
 cond = True
-t0 = time()
+t0 = ticks_ms()
 t = t0
 t_last = t0
 sleep(1)
 pressure = 0
-while t-t0 < 200:
-    t = time()
-    if t > t_last:
+while t-t0 < 200000:
+    t = ticks_ms()
+    if t > t_last+999:
         temperature = temp_sens.ReadTemp_c()
+        t_ = ticks_diff(ticks_ms(),t)
         intensity = pid(temperature)
         pwm.duty(int(1023*intensity/50))
         file.write(str(t) + "," + str(intensity) + ","
                    + str(temperature) + "\n")
-        print("temp: ", temperature, "pid-out: ", intensity, "time: ", t-t0, "pressure: ", pressure, end = "           \r")
-    
+        print("temp:", temperature, ", pid-out:", intensity, ", time:", ticks_diff(t,t0), ", pressure: ", pressure, t_, end = "           \r")
+        t_last = t
     if is_brew():
         light_on()
         valve_on()
@@ -117,8 +118,6 @@ while t-t0 < 200:
         light_off()
         pump_off()
         valve_off()
-    
-    t_last = t
 
 #all_off()
 pwm.duty(0)    
