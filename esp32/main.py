@@ -45,7 +45,7 @@ temp_sens = tsic(temp_pin, Pin(2,Pin.OUT))
 
 # initiate heater PWM and PID-controller #
 brewtemp = 95
-steamtemp = 200
+steamtemp = 120
 heater = PWM(heater_pin, freq=1, duty=0)
 pid = PID(.7, 0.1, 30, setpoint=brewtemp, scale='s')
 pid.sample_time = 1

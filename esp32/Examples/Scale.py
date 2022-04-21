@@ -6,27 +6,25 @@
 # P10   | clock_pin
 #
 
-from hx711_gpio import HX711
+from hx711 import HX711
 from machine import Pin
 from time import sleep, ticks_us, ticks_diff
 
-pin_OUT = Pin(19, Pin.IN, pull=Pin.PULL_DOWN)
+pin_DTL = Pin(19, Pin.IN, pull=Pin.PULL_DOWN)
+pin_DTR = Pin(21, Pin.IN, pull=Pin.PULL_DOWN)
 pin_SCK = Pin(18, Pin.OUT)
 
-left = HX711(pin_SCK, pin_OUT, gain = 128)
-left.tare()
-#right = HX711(pin_SCK, pin_OUT, gain = 128)
-#right.tare()
+scale = HX711(pin_SCK, pin_DTL, pin_DTR)
+sleep(1)
+print(scale.OFFSET)
+scale.tare()
+print(scale.OFFSET)
 while True:
-    t1 = ticks_us()
-    value = left.read()
-    t2 = ticks_us()
-    #value2 = left.read()
-    #t3 = ticks_ms()
-    t = ticks_diff(t2, t1)
-    #t_ = ticks_diff(t3, t2)
-    print(t, value)
-    sleep(1)
+    t = ticks_us()
+    value = round(scale.get_value(),1)
+    t = ticks_diff(ticks_us(),t)/1000
+    print(value, t)
+    sleep(.1)
 
 
     
