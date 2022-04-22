@@ -16,6 +16,8 @@ class HX711:
         self.filtered = 0
 
         self.set_gain(gain);
+        
+        time.sleep(1)
 
     def set_gain(self, gain):
         if gain is 128:

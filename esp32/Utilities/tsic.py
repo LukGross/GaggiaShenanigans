@@ -71,8 +71,11 @@ class tsic:
         return self.T
 
     def ReadTemp_c(self):
-        return round(self.T / (2**self.bits - 1) * (self.high - self.low)
-                     + self.low, self.prec)
+        if self.T != None:
+            return round(self.T / (2**self.bits - 1) * (self.high - self.low)
+                         + self.low, self.prec)
+        else:
+            return None
         
     def startReading(self, t):
         t0 = ticks_ms()        
@@ -88,6 +91,8 @@ class tsic:
         temp = self.ReadBuffer()
         if temp != None and (temp >= 0 and temp < 2**self.bits):
             self.T = temp
+        else:
+            self.T = None
         self.tau = ticks_diff(ticks_ms(), t0)
         if self.tau < 4:
             self.period = (self.period-1) % 120
