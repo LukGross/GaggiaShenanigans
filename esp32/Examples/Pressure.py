@@ -4,7 +4,7 @@ from pressure import pressure
 
 pin = Pin(32)
 press = pressure(pin)
-n = 100
+n = 10
 while True:
     t = ticks_ms()
     val = press.read(n)

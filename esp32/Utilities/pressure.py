@@ -10,6 +10,6 @@ class pressure:
         r = range(n)
         reading = 0
         for i in r:
-            reading += ((self.high-self.low)*(self.analog.read_uv() - 330000)
-                        /2600000 + self.low)/n
-        return reading
+            reading += self.analog.read_uv()
+        return ((self.high-self.low)*(reading/n - 330000)
+                        /2600000 + self.low)
