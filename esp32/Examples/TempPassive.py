@@ -8,8 +8,10 @@ sens = tsic(temp)
 temptimer = timer("us")
 
 while True:
+#for i in range(10):
     temptimer.start()
     temperature = sens.ReadTemp_c()
     temptimer.stop()
     print("Temperature: " + str(temperature)+ "° ", "Runtime: " +str(temptimer.runtime)+temptimer.scale)
-    sleep(.1)
+    sleep(.2)
+    print(sens.tau)

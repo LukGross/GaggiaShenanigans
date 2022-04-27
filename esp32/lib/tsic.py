@@ -1,4 +1,4 @@
-from time import ticks_cpu, ticks_ms, ticks_diff, sleep
+from time import ticks_cpu, ticks_ms, ticks_diff, sleep, ticks_us
 from collections import deque
 from machine import Timer
 
@@ -17,6 +17,7 @@ class tsic:
         self.tau = 0
         self.timer = Timer(0)
         self.period = 77
+        self.deathcount = 0
 
         self.startReading(self.timer)
 
@@ -78,7 +79,8 @@ class tsic:
             return None
         
     def startReading(self, t):
-        t0 = ticks_ms()        
+        self.deathcount += 1
+        t0 = ticks_us()        
         for i in range(20):
             while self.data.value() == 1:
                 pass
@@ -90,13 +92,16 @@ class tsic:
         
         temp = self.ReadBuffer()
         if temp != None and (temp >= 0 and temp < 2**self.bits):
-            self.T = temp
-        else:
+            if self.T == None or abs(temp - self.T) < 0.1 * 2**self.bits:
+                self.T = temp
+                self.deathcount = 0
+        if self.deathcount > 10:
             self.T = None
-        self.tau = ticks_diff(ticks_ms(), t0)
-        if self.tau < 4:
+
+        self.tau = ticks_diff(ticks_us(), t0)
+        if self.tau < 4000:
             self.period = (self.period-1) % 120
-        elif self.tau > 5:
+        elif self.tau > 5000:
             self.period = (self.period+1) % 120
         t.init(mode=Timer.ONE_SHOT, period = self.period,
                callback = self.startReading)

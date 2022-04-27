@@ -44,14 +44,14 @@ from pressure import pressure
 press_adc = pressure(press_pin)
 
 # initiate heater PWM and PID-controller #
-brewtemp = 95
-steamtemp = 145
+brewtemp = 80
+steamtemp = 95
 
 from machine import PWM
 heater = PWM(heater_pin, freq=1, duty=0)
 
-from PID import PID
-pid = PID(14.3, 2, 613, setpoint=brewtemp, scale='s')
+from PID_discounted import PID
+pid = PID(15, 2, 100, setpoint=brewtemp, scale='s')
 pid.sample_time = 1
 pid.output_limits = (0, 1023)
 
@@ -72,10 +72,7 @@ def is_pump():
     return pump_pin()
     
 def heater_on(duty = 1023):
-    if duty == None:
-        duty = 0
-    else:
-        duty = int(duty)
+    duty = int(duty)
     heater.duty(duty)
 def heater_off():
     heater.duty(0)
@@ -148,8 +145,8 @@ async def display(debug = False):
             print("temperature: " + str(round(temp_sens.ReadTemp_c(),1)) + "°C; "
                   + "pressure: " + str(round(press_adc.read(),1)) + "bar; "
                   + "weight: " + str(round(scale.get_value(),1)) + "g; "
-                  + "heater-duty: " + str(round(heater_duty()/1023*100,0)) + "%; "
-                  + "pid-goal: " + str(round(pid.setpoint,0)) + "°C;"
+                  + "heater-duty: " + str(round(heater_duty()/1023*100)) + "%; "
+                  + "pid-goal: " + str(round(pid.setpoint,0)) + "°C; "
                   + "is_steam: " + str(sw.is_steam) + "; "
                   + "is_brew: " + str(sw.is_brew) + "; "
                   + "is_light: " + str(is_light()) + "; "
@@ -157,7 +154,7 @@ async def display(debug = False):
                   + "is_pump: " + str(is_pump()) + "; "
                   , end = "           \r")
         else:
-            print("temperature: " + str(round(temp_sens.ReadTemp_c(),1)) + "°; "
+            print("temperature: " + str(temperature) + "°; "
                   + "pressure: " + str(round(press_adc.read(),1)) + "bar; "
                   + "weight: " + str(round(scale.get_value(),1)) + "g"
                   , end = "           \r")
@@ -177,7 +174,7 @@ async def main_dumb(debug = False):
     display_task = uasyncio.create_task(display(debug))
     switches_task = uasyncio.create_task(switches())
     #while True:
-    await uasyncio.sleep(100)
+    await uasyncio.sleep(1000)
 
 import uasyncio
 from timing import timer
