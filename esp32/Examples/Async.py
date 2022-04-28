@@ -1,42 +1,43 @@
 import uasyncio
 from time import ticks_ms, ticks_diff, ticks_us
-mss = 0
-t = 0
 c = 0
+timesup = uasyncio.Event()
 
 async def blink(led, period_ms):
-    while True:
+    global c
+    while not timesup.is_set():
         led.on()
         await uasyncio.sleep_ms(period_ms)
         led.off()
-        await uasyncio.sleep_ms(period_ms)
-
-async def count():
-    global mss
-    while True:
-        await uasyncio.sleep_ms(100)
-        mss +=1
-        
-async def time():
-    global c
-    global t
-    while True:
-        t0 = ticks_us()
-        await uasyncio.sleep(1)
-        t += ticks_diff(ticks_us(), t0)
         c += 1
+        await uasyncio.sleep_ms(period_ms)
+    return True
 
-async def main(led):
-    blinker = uasyncio.create_task(blink(led, 10))
-    counter = uasyncio.create_task(time())
-    await uasyncio.sleep_ms(5000)
-    blinker.cancel()
-    counter.cancel()
-    print(t/c/1000)
-    uasyncio.create_task(blink(led, 100))
-    await uasyncio.sleep_ms(5000)
+async def count(max):
+    global c
+    timesup.clear()
+    while c <= max:
+        print(c)
+        await uasyncio.sleep_ms(10)
+    timesup.set()
+        
+
+
+def main(led):
+    global c
+    period = 50
+    increment = 50
+    for i in range(10):
+        c = 0
+        counter = uasyncio.create_task(count(5))
+        blinker = uasyncio.create_task(blink(led,period))
+        period += increment
+        a = await blinker
+    
+    
 
 
 # Running on a generic board
 from machine import Pin
-uasyncio.run(main(Pin(2, Pin.OUT)))
+led = Pin(2, Pin.OUT)
+uasyncio.run(main(led))

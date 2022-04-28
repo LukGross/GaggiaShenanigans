@@ -12,4 +12,4 @@ while True:
     val = press.read(n)
     ptimer.stop()
     print("Pressure: " + str(round(val,1)) + "bar", "Time: "+ str(ptimer.runtime)+ str(ptimer.scale))
-    sleep(.5)
+    sleep(0.5)

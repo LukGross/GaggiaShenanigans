@@ -1,8 +1,10 @@
 from machine import enable_irq, disable_irq, idle
 import time
+from timing import timer
+import uasyncio as aio
 
 class HX711:
-    def __init__(self, pd_sck, dout_left, dout_right, gain=128):
+    def __init__(self, pd_sck, dout_left, dout_right, gain=128, deadtime = 100):
         self.pSCK = pd_sck
         self.pOUT_left = dout_left
         self.pOUT_right = dout_right
@@ -14,10 +16,14 @@ class HX711:
 
         self.time_constant = 0.25
         self.filtered = 0
-
-        self.set_gain(gain);
         
-        time.sleep(1)
+        self.deadtime = deadtime
+        self.deadtimer = timer()
+        self.deadtimer.start()
+        self.last = 0
+
+        self.set_gain(gain)
+        self.tare()
 
     def set_gain(self, gain):
         if gain is 128:
@@ -34,6 +40,9 @@ class HX711:
         return self.pOUT_left() == 0 and self.pOUT_right() == 0
 
     def read(self):
+        if self.deadtimer.current() < self.deadtime:
+            return self.last
+        
         # wait for the device being ready
         for _ in range(500):
             if self.is_ready:
@@ -52,7 +61,10 @@ class HX711:
             enable_irq(state)
             result_left = (result_left << 1) | self.pOUT_left()
             result_right = (result_right << 1) | self.pOUT_right()
-
+        
+        # restart deadtimer
+        self.deadtimer.start()
+        
         # shift back the extra bits
         result_left >>= self.GAIN
         result_right >>= self.GAIN
@@ -62,14 +74,23 @@ class HX711:
             result_left -= 0x1000000
         if result_right > 0x7fffff:
             result_right -= 0x1000000
+            
+        self.last = result_left + result_right
 
-        return result_left + result_right
+        return self.last
 
-    def read_average(self, times=3, sleep=0.1):
+    def read_average(self, times=3, sleeptime=0.1):
         total = 0
         for i in range(times):
             total += self.read()
-            time.sleep(sleep)
+            time.sleep(sleeptime)
+        return total / times
+    
+    async def read_average_async(self, times=3, sleeptime=0.1):
+        total = 0
+        for i in range(times):
+            total += self.read()
+            await aio.sleep(sleeptime)
         return total / times
 
     def read_lowpass(self):
@@ -87,6 +108,11 @@ class HX711:
 
     def tare(self, times=15):
         self.set_offset(self.read_average(times))
+        
+    async def tare_async(self, times=15):
+        reading = await aio.create_task(self.read_average_async(times))
+        self.set_offset(reading)
+    
     def set_scale(self, scale):
         self.SCALE = scale
 

@@ -13,5 +13,5 @@ while True:
     temperature = sens.ReadTemp_c()
     temptimer.stop()
     print("Temperature: " + str(temperature)+ "° ", "Runtime: " +str(temptimer.runtime)+temptimer.scale)
-    sleep(.2)
+    sleep(0)
     print(sens.tau)

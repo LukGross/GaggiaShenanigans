@@ -29,9 +29,12 @@ class timer:
         self.t0 = self.time()
     
     def stop(self):
-        self.runtime = self.diff(self.time(), self.t0)
-        self.running = False
-        return self.runtime
+        if self.running:
+            self.runtime = self.diff(self.time(), self.t0)
+            self.running = False
+            return self.runtime
+        else:
+            return 0
     
     def current(self):
         if self.running:

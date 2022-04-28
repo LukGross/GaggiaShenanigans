@@ -16,6 +16,10 @@
 # 33    | temperature probe
 # 32    | pressure transducer
 
+# General Imports #
+from timing import timer
+import uasyncio as aio
+
 # Pin Declarations #
 from machine import Pin
 # OUT
@@ -42,6 +46,21 @@ scale.tare()
 
 from pressure import pressure
 press_adc = pressure(press_pin)
+
+class sensors:
+    def __init__():
+        self.temperature = temp_sens.ReadTemp_c()
+        self.weight = scale.get_value()
+        self.pressure = press_adc.read()
+    
+    def update_temperature(self):
+        self.temperature = temp_sens.ReadTemp_c()
+    
+    def update_weight(self):
+        self.weight = scale.get_value()
+    
+    def update_pressure(self):
+        self.pressure = press_adc.read()
 
 # initiate heater PWM and PID-controller #
 brewtemp = 80
@@ -72,7 +91,10 @@ def is_pump():
     return pump_pin()
     
 def heater_on(duty = 1023):
-    duty = int(duty)
+    if duty == None:
+        duty = 0
+    else:
+        duty = int(duty)
     heater.duty(duty)
 def heater_off():
     heater.duty(0)
@@ -97,20 +119,30 @@ class switches:
     def __init__(self, brew_pin, steam_pin):
         self.brew_pin = brew_pin
         self.steam_pin = steam_pin
-        self.is_brew = False
-        self.is_steam = False
-        self.was_brew = False
-        self.was_steam = False
+        self.is_brew = 0
+        self.is_steam = 0
+        self.was_brew = 0
+        self.was_steam = 0
         self.update()
+    
+    def __call__(self):
+        return self.is_brew, self.was_brew, self.is_steam, self.was_steam
 
     def update(self):
         self.was_brew = self.is_brew
-        self.was_steam = self.is_brew
+        self.was_steam = self.is_steam
         self.is_brew = self.brew_pin()
         self.is_steam = self.steam_pin()
+    
+    def unchanged(self):
+        self.update()
+        return self.was_brew == self.is_brew and self.was_steam == self.is_steam
 
 sw = switches(brew_pin, steam_pin)
-    
+
+# Events #
+switched = aio.Event()
+
 # Coroutines #
 # heating control loop
 async def heater_control():
@@ -122,7 +154,7 @@ async def heater_control():
         else:
             pid.setpoint = brewtemp
         heater_on(pid(temp_sens.ReadTemp_c()))
-        await uasyncio.sleep(1)
+        await aio.sleep(1)
 
 # brew control loop for standard controls
 async def dumb_brew():
@@ -136,7 +168,36 @@ async def dumb_brew():
         else:
             pump_off()
             valve_off()
-        await uasyncio.sleep(0)
+        await aio.sleep(0)
+
+async def timed_brew(brewtime = 25):
+    brewtime = brewtime*1000
+    brew_timer = timer()
+    brew_timer.start()
+    if sw()[2]:
+        valve_on()
+    else:
+        valve_off()
+    pump_on()
+    while not switched.is_set() and brew_timer.current() <= brewtime:
+        await aio.sleep(0)
+    pump_off()
+    valve_off()
+    
+async def weigh_brew(target_weight = 30):
+    await aio.create_task(scale.tare_async())
+    brew_timer = timer()
+    brew_timer.start()
+    if sw()[2]:
+        valve_on()
+    else:
+        valve_off()
+    pump_on()
+    while not switched.is_set() and scale.get_value() <= target_weight:
+        await aio.sleep(0)
+    pump_off()
+    valve_off()
+    
         
 # display loop
 async def display(debug = False):
@@ -147,43 +208,56 @@ async def display(debug = False):
                   + "weight: " + str(round(scale.get_value(),1)) + "g; "
                   + "heater-duty: " + str(round(heater_duty()/1023*100)) + "%; "
                   + "pid-goal: " + str(round(pid.setpoint,0)) + "°C; "
-                  + "is_steam: " + str(sw.is_steam) + "; "
-                  + "is_brew: " + str(sw.is_brew) + "; "
-                  + "is_light: " + str(is_light()) + "; "
-                  + "is_valve: " + str(is_valve()) + "; "
-                  + "is_pump: " + str(is_pump()) + "; "
+                  + "brew/steam: " + str(sw()[0]), str(sw()[2]) + "; "
+                  + "light/valve/pump: " + str(is_light()), str(is_valve()), str(is_pump())
                   , end = "           \r")
         else:
-            print("temperature: " + str(temperature) + "°; "
+            print("temperature: " + str(temp_sens.ReadTemp_c()) + "°; "
                   + "pressure: " + str(round(press_adc.read(),1)) + "bar; "
                   + "weight: " + str(round(scale.get_value(),1)) + "g"
                   , end = "           \r")
-        await uasyncio.sleep(.5)
+        await aio.sleep(.5)
 
-# switch supervisor
-async def switches():
+# switch watcher
+async def switch_watcher():
+    while sw.unchanged():
+        await aio.sleep(.01)
+    switched.set()
+
+async def switch_watcher_dumb():
     while True:
         sw.update()
-        await uasyncio.sleep(.01)
+        await aio.sleep(.01)
 
 # main routines #
-# standard gaggia classic behaviour
+# pid heating + standard gaggia classic brewing
 async def main_dumb(debug = False):
-    heater_task = uasyncio.create_task(heater_control())
-    brew_task = uasyncio.create_task(dumb_brew())
-    display_task = uasyncio.create_task(display(debug))
-    switches_task = uasyncio.create_task(switches())
-    #while True:
-    await uasyncio.sleep(1000)
+    loop = aio.get_event_loop()
+    heater_task = aio.create_task(heater_control())
+    brew_task = aio.create_task(dumb_brew())
+    display_task = aio.create_task(display(debug))
+    switches_task = aio.create_task(switch_watcher_dumb())
+    loop.run_forever()
 
-import uasyncio
-from timing import timer
+# pid heating + smart brewing
+async def main(debug = False):
+    heater_task = aio.create_task(heater_control())
+    display_task = aio.create_task(display(debug))
+    while True:
+        switched.clear()
+        if sw()[0] and not sw()[1]:
+            switches_task = aio.create_task(switch_watcher())
+            brew_task = aio.create_task(weigh_brew())
+            await switches_task
+            await brew_task
+        else:
+            switches_task = await aio.create_task(switch_watcher())
 
 if sw.is_steam:
-    uasyncio.run(main_dumb(debug = True))
+    aio.run(main_dumb(debug = True))
     pass
 else:
-    pass
+    aio.run(main(debug = True))
 all_off()
 
 
