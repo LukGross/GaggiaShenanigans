@@ -108,6 +108,9 @@ class PID(object):
         """
         if not self.auto_mode:
             return self._last_output
+        
+        if input_ == None:
+            return 0
 
         now = self.time()
         if dt is None:

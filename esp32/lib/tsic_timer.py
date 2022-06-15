@@ -1,6 +1,6 @@
 from time import ticks_cpu, ticks_ms, ticks_diff, sleep, ticks_us
 from collections import deque
-from machine import Timer, Pin
+from machine import Timer
 
 
 class tsic:
@@ -15,19 +15,20 @@ class tsic:
         self.q = deque((), 40)
         self.T = None
         self.tau = 0
-        self.deathcount = 0
-        self.edgecount = 0
         self.timer = Timer(0)
+        self.period = 77
+        self.deathcount = 0
 
-        self.data.irq(trigger=3, handler = self.irqhandler)
+        self.startReading(self.timer)
 
     def ReadBuffer(self):
         t1 = self.q.popleft()
         t2 = self.q.popleft()
         t3 = self.q.popleft()
-        strobe = ticks_diff(t3, t2)
-        var = abs(1 - ticks_diff(t2, t1) / strobe)
+        strobe = ticks_diff(t2, t1)
+        var = abs(1 - ticks_diff(t3, t2) / strobe)
         if var > 0.2:
+            #print("shifted")
             return None
         bitstr = 0
         parity = False
@@ -44,6 +45,7 @@ class tsic:
         t2 = self.q.popleft()
         t = ticks_diff(t2, t1)
         if not parity == (t < strobe):
+            #print("parity")
             return None
         t1 = self.q.popleft()
         t2 = self.q.popleft()
@@ -62,6 +64,7 @@ class tsic:
         t2 = self.q.popleft()
         t = ticks_diff(t2, t1)
         if not parity == (t < strobe):
+            #print("parity")
             return None
         return bitstr
 
@@ -75,15 +78,19 @@ class tsic:
         else:
             return None
         
-    def irqhandler(self, pin):
-        self.q.append(ticks_cpu())
-        self.edgecount = self.edgecount + 1
-        if self.edgecount == 40:
-            self.timer.init(period=50, mode=Timer.ONE_SHOT, callback=self.timerhandler)
-                
-    def timerhandler(self, timer):
-        self.edgecount = 0
+    def startReading(self, t):
         self.deathcount += 1
+        print(deathcount)
+        t0 = ticks_us()        
+        for i in range(20):
+            while self.data.value() == 1:
+                pass
+            self.q.append(ticks_cpu())
+            while self.data.value() == 0:
+                pass
+            self.q.append(ticks_cpu())
+        self.ReadTemp_int()
+        
         temp = self.ReadBuffer()
         if temp != None and (temp >= 0 and temp < 2**self.bits):
             if self.T == None or abs(temp - self.T) < 0.1 * 2**self.bits:
@@ -91,9 +98,55 @@ class tsic:
                 self.deathcount = 0
         if self.deathcount > 10:
             self.T = None
-             
-    def calc_ticks_diffs(self):
-        ticks = [self.q.popleft() for i in range(len(self.q))]
-        diffs = [ticks[i+1]-ticks[i] for i in range(len(ticks)-1)]
-        return ticks, diffs
+        print(self.T)
+        self.tau = ticks_diff(ticks_us(), t0)
+        if self.tau < 4000:
+            self.period = (self.period-1) % 120
+        elif self.tau > 5000:
+            self.period = (self.period+1) % 120
+        t.init(mode=Timer.ONE_SHOT, period = self.period,
+               callback = self.startReading)
+        
+        
 
+
+class tsicActive(tsic):
+    def __init__(
+        self, dataPin, powerPin, maxBitTime=40000, high=150, low=-50,
+        prec=1, bits=11
+    ):
+        self.data = dataPin
+        self.power = powerPin
+        self.power.value(0)
+        self.maxBitTime = maxBitTime
+        self.high = high
+        self.low = low
+        self.prec = prec
+        self.bits = bits
+        self.q = deque((), 40)
+
+    def fillBuffer(self):
+        self.q = deque((), 40)
+        self.power.value(1)
+        self.q.append(ticks_cpu())
+        while len(self.q) < 40:
+            while self.data.value() == 1:
+                pass
+            self.q.append(ticks_cpu())
+            while self.data.value() == 0:
+                pass
+            self.q.append(ticks_cpu())
+        self.power.value(0)
+
+    def ReadTemp_int(self):
+        self.fillBuffer()
+        return self.ReadBuffer()
+
+    def ReadTemp_c(self):
+        self.fillBuffer()
+        temp = self.ReadBuffer()
+        if temp != None:
+            T = temp
+        return round(
+            T / (2**self.bits - 1) * (self.high - self.low) + self.low, self.prec
+        )

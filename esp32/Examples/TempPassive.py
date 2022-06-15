@@ -6,6 +6,7 @@ from timing import timer
 temp = Pin(33, Pin.IN, Pin.PULL_UP)
 sens = tsic(temp)
 temptimer = timer("us")
+sleep(1)
 
 while True:
 #for i in range(10):
@@ -13,5 +14,5 @@ while True:
     temperature = sens.ReadTemp_c()
     temptimer.stop()
     print("Temperature: " + str(temperature)+ "° ", "Runtime: " +str(temptimer.runtime)+temptimer.scale)
-    sleep(0)
+    sleep(0.01)
     print(sens.tau)

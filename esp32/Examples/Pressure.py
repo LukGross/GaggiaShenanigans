@@ -6,7 +6,7 @@ from pressure import pressure
 pin = Pin(32)
 press = pressure(pin)
 n = 10
-ptimer = timer("ms")
+ptimer = timer("us")
 while True:
     ptimer.start()
     val = press.read(n)

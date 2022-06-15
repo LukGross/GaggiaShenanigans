@@ -15,7 +15,7 @@ while True:
     value = round(scale.get_value(),1)
     t.stop()
     print("Weight:", str(value)+"g ","runtime:", str(t.runtime) + str(t.scale))
-    sleep(0.01)
+    sleep(0.5)
 
 
     
